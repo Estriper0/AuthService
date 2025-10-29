@@ -1,0 +1,4 @@
+database:
+  dbhost: localhost
+  dbpassword: 12345
+  dbname: auth_db

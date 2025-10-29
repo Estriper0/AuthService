@@ -1,0 +1,11 @@
+env: local
+port: 50051
+timeout: 30s
+token_ttl: 1h
+database:
+  dbhost: localhost
+  dbport: 5432
+  dbuser: postgres
+  dbpassword: 12345
+  dbname: auth_db
+  sslmode: disable
