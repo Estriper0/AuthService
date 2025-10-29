@@ -18,6 +18,16 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+func TestMain(m *testing.M) {
+	os.Setenv("APP_ENV", "test")
+
+	os.Setenv("DB_NAME", "db_test")
+	os.Setenv("DB_USER", "postgres")
+	os.Setenv("DB_PASSWORD", "12345")
+
+	m.Run()
+}
+
 type TestSuite struct {
 	suite.Suite
 
@@ -35,8 +45,6 @@ func TestRepositoriesSuite(t *testing.T) {
 }
 
 func (s *TestSuite) SetupSuite() {
-	os.Setenv("CONFIG_PATH", "../configs/test.yaml")
-
 	ctx := context.Background()
 	config := config.New()
 

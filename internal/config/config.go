@@ -1,10 +1,11 @@
 package config
 
 import (
-	"flag"
+	"log"
 	"os"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 )
 
@@ -26,22 +27,32 @@ type Database struct {
 }
 
 func New() *Config {
-	var path string
-
-	flag.StringVar(&path, "config", "", "path to config")
-	flag.Parse()
-
-	path_env, ok := os.LookupEnv("CONFIG_PATH")
-	if ok {
-		path = path_env
+	if os.Getenv("APP_ENV") == "" || os.Getenv("APP_ENV") == "local" {
+		if err := godotenv.Load(".env"); err != nil {
+			log.Printf("No .env file found: %v", err)
+		}
 	}
 
-	if path == "" {
-		panic("empty config path")
+	env := os.Getenv("APP_ENV")
+	if env == "" {
+		env = "local"
 	}
 
-	viper.SetConfigFile(path)
+	viper.AddConfigPath("./configs")
+	viper.AddConfigPath("../configs")
+	viper.SetConfigName(env)
 	viper.SetConfigType("yaml")
+
+	viper.SetDefault("env", env)
+	viper.SetDefault("database.dbport", 5432)
+	viper.SetDefault("database.dbhost", "localhost")
+
+	viper.BindEnv("database.dbhost", "DB_HOST")
+	viper.BindEnv("database.dbport", "DB_PORT")
+	viper.BindEnv("database.dbname", "DB_NAME")
+	viper.BindEnv("database.dbuser", "DB_USER")
+	viper.BindEnv("database.dbpassword", "DB_PASSWORD")
+	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {
 		panic(err)
