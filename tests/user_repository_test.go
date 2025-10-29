@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/Estriper0/auth_service/internal/repository"
-	"github.com/Estriper0/auth_service/internal/repository/user"
+	"github.com/Estriper0/auth_service/internal/repository/database/user"
 )
 
 func (s *TestSuite) TestUserRepository_Create_Success() {

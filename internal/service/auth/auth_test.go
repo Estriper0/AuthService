@@ -12,7 +12,7 @@ import (
 	jwt_service "github.com/Estriper0/auth_service/internal/jwt"
 	"github.com/Estriper0/auth_service/internal/models"
 	"github.com/Estriper0/auth_service/internal/repository"
-	"github.com/Estriper0/auth_service/internal/repository/mocks"
+	"github.com/Estriper0/auth_service/internal/repository/database/mocks"
 	srv "github.com/Estriper0/auth_service/internal/service"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/golang/mock/gomock"

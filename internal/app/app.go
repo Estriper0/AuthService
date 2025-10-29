@@ -4,8 +4,8 @@ import (
 	"log/slog"
 
 	"github.com/Estriper0/auth_service/internal/config"
-	app_repo "github.com/Estriper0/auth_service/internal/repository/app"
-	user_repo "github.com/Estriper0/auth_service/internal/repository/user"
+	app_repo "github.com/Estriper0/auth_service/internal/repository/database/app"
+	user_repo "github.com/Estriper0/auth_service/internal/repository/database/user"
 	"github.com/Estriper0/auth_service/internal/server"
 	auth_service "github.com/Estriper0/auth_service/internal/service/auth"
 	"github.com/Estriper0/auth_service/pkg/db"

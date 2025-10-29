@@ -5,7 +5,7 @@ import (
 
 	"github.com/Estriper0/auth_service/internal/models"
 	"github.com/Estriper0/auth_service/internal/repository"
-	"github.com/Estriper0/auth_service/internal/repository/app"
+	"github.com/Estriper0/auth_service/internal/repository/database/app"
 )
 
 func (s *TestSuite) TestAppRepository_GetByID_Success() {
