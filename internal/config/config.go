@@ -14,6 +14,7 @@ type Config struct {
 	Timeout  time.Duration `mapstructure:"timeout"`
 	TokenTTL time.Duration `mapstructure:"token_ttl"`
 	DB       Database      `mapstructure:"database"`
+	Redis    Redis         `mapstructure:"redis"`
 }
 
 type Database struct {
@@ -23,6 +24,12 @@ type Database struct {
 	DbPassword string `mapstructure:"dbpassword"`
 	DbName     string `mapstructure:"dbname"`
 	SSLMode    string `mapstructure:"sslmode"`
+}
+
+type Redis struct {
+	Addr     string        `mapstructure:"addr"`
+	CacheTTL time.Duration `mapstructure:"cache_ttl"`
+	Password string `mapstructure:"password"`
 }
 
 func New() *Config {
@@ -47,6 +54,8 @@ func New() *Config {
 	viper.BindEnv("database.dbname", "DB_NAME")
 	viper.BindEnv("database.dbuser", "DB_USER")
 	viper.BindEnv("database.dbpassword", "DB_PASSWORD")
+	viper.BindEnv("redis.addr", "REDIS_ADDR")
+	viper.BindEnv("redis.password", "REDIS_PASSWORD")
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {

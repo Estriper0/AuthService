@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strconv"
 
 	"github.com/Estriper0/auth_service/internal/config"
 	"github.com/Estriper0/auth_service/internal/jwt"
+	"github.com/Estriper0/auth_service/internal/redis"
 	"github.com/Estriper0/auth_service/internal/repository"
 	"github.com/Estriper0/auth_service/internal/service"
 	"golang.org/x/crypto/bcrypt"
@@ -17,14 +19,16 @@ type AuthService struct {
 	config   *config.Config
 	userRepo repository.IUserRepository
 	appRepo  repository.IAppRepository
+	cache    redis.Cache
 }
 
-func New(logger *slog.Logger, config *config.Config, userRepo repository.IUserRepository, appRepo repository.IAppRepository) *AuthService {
+func New(logger *slog.Logger, config *config.Config, userRepo repository.IUserRepository, appRepo repository.IAppRepository, cache redis.Cache) *AuthService {
 	return &AuthService{
 		logger:   logger,
 		config:   config,
 		userRepo: userRepo,
 		appRepo:  appRepo,
+		cache:    cache,
 	}
 }
 
@@ -114,6 +118,16 @@ func (s *AuthService) IsAdmin(
 		"Checking user is admin",
 		slog.String("uuid", uuid),
 	)
+	isAdminCache, err := s.cache.Get(ctx, uuid)
+	if err == nil {
+		s.logger.Info(
+			"Successfully check user is admin in cache",
+			slog.String("uuid", uuid),
+			slog.String("is_admin", isAdminCache),
+		)
+		res, _ := strconv.ParseBool(isAdminCache)
+		return res, nil
+	}
 
 	isAdmin, err := s.userRepo.IsAdmin(ctx, uuid)
 	if err != nil {
@@ -131,5 +145,13 @@ func (s *AuthService) IsAdmin(
 		slog.String("uuid", uuid),
 		slog.Bool("is_admin", isAdmin),
 	)
+
+	err = s.cache.Set(ctx, uuid, isAdmin, s.config.Redis.CacheTTL)
+	if err != nil {
+		s.logger.Warn("Failed to add to cache")
+	} else {
+		s.logger.Info("Successfully added to cache")
+	}
+
 	return isAdmin, nil
 }

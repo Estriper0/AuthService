@@ -3,3 +3,5 @@ timeout: 1h
 token_ttl: 1h
 database:
   sslmode: disable
+redis:
+  cache_ttl: 1m

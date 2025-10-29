@@ -16,6 +16,8 @@ services:
     depends_on:
       migrations:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     command: ["./main"]
   
   migrations:
@@ -46,6 +48,20 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  redis:
+    <<: *base
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "$REDIS_PASSWORD", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     
 volumes:
   db_data:
+  redis_data:

@@ -11,6 +11,7 @@ import (
 	"github.com/Estriper0/auth_service/internal/config"
 	jwt_service "github.com/Estriper0/auth_service/internal/jwt"
 	"github.com/Estriper0/auth_service/internal/models"
+	"github.com/Estriper0/auth_service/internal/redis"
 	"github.com/Estriper0/auth_service/internal/repository"
 	"github.com/Estriper0/auth_service/internal/repository/database/mocks"
 	srv "github.com/Estriper0/auth_service/internal/service"
@@ -27,13 +28,14 @@ func TestAuthService_Login(t *testing.T) {
 
 	mockUserRepo := mocks.NewMockIUserRepository(ctrl)
 	mockAppRepo := mocks.NewMockIAppRepository(ctrl)
+	mockRedis := redis.NewMockCache(ctrl)
 
 	logger := slog.Default()
 	cfg := &config.Config{
 		TokenTTL: 24 * time.Hour,
 	}
 
-	service := New(logger, cfg, mockUserRepo, mockAppRepo)
+	service := New(logger, cfg, mockUserRepo, mockAppRepo, mockRedis)
 
 	ctx := context.Background()
 
@@ -155,11 +157,12 @@ func TestAuthService_Register(t *testing.T) {
 
 	mockUserRepo := mocks.NewMockIUserRepository(ctrl)
 	mockAppRepo := mocks.NewMockIAppRepository(ctrl)
+	mockRedis := redis.NewMockCache(ctrl)
 
 	logger := slog.Default()
 	cfg := &config.Config{}
 
-	service := New(logger, cfg, mockUserRepo, mockAppRepo)
+	service := New(logger, cfg, mockUserRepo, mockAppRepo, mockRedis)
 
 	ctx := context.Background()
 
@@ -225,11 +228,12 @@ func TestAuthService_IsAdmin(t *testing.T) {
 
 	mockUserRepo := mocks.NewMockIUserRepository(ctrl)
 	mockAppRepo := mocks.NewMockIAppRepository(ctrl)
+	mockRedis := redis.NewMockCache(ctrl)
 
 	logger := slog.Default()
 	cfg := &config.Config{}
 
-	service := New(logger, cfg, mockUserRepo, mockAppRepo)
+	service := New(logger, cfg, mockUserRepo, mockAppRepo, mockRedis)
 
 	ctx := context.Background()
 
@@ -289,6 +293,10 @@ func TestAuthService_IsAdmin(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupMocks()
+			mockRedis.EXPECT().Get(gomock.Any(), gomock.Any()).Return("", errors.New("Not found"))
+			if tt.expectedErr == nil {
+				mockRedis.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+			}
 
 			isAdmin, err := service.IsAdmin(ctx, tt.uuid)
 
