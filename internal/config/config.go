@@ -1,7 +1,6 @@
 package config
 
 import (
-	"log"
 	"os"
 	"time"
 
@@ -27,11 +26,7 @@ type Database struct {
 }
 
 func New() *Config {
-	if os.Getenv("APP_ENV") == "" || os.Getenv("APP_ENV") == "local" {
-		if err := godotenv.Load(".env"); err != nil {
-			log.Printf("No .env file found: %v", err)
-		}
-	}
+	_ = godotenv.Load(".env")
 
 	env := os.Getenv("APP_ENV")
 	if env == "" {

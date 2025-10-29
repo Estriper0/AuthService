@@ -1,4 +1,4 @@
-port: 50052
+port: 50051
 timeout: 1h
 token_ttl: 1h
 database:
