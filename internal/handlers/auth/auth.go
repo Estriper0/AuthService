@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 
 	"github.com/Estriper0/auth_service/internal/service"
 	pb "github.com/Estriper0/protobuf_eventhub/gen/auth"
@@ -30,6 +31,12 @@ func (s *AuthGRPCService) Login(
 
 	token, err := s.authService.Login(ctx, req.GetEmail(), req.GetPassword(), req.GetAppId())
 	if err != nil {
+		if errors.Is(err, service.ErrInvalidCredentials) {
+			return nil, status.Error(codes.InvalidArgument, "invalid credentials")
+		}
+		if errors.Is(err, service.ErrAppNotFound) {
+			return nil, status.Error(codes.NotFound, "app not found")
+		}
 		return nil, status.Error(codes.Internal, "internal error")
 	}
 
@@ -48,6 +55,9 @@ func (s *AuthGRPCService) Register(
 
 	uuid, err := s.authService.Register(ctx, req.GetEmail(), req.GetPassword())
 	if err != nil {
+		if errors.Is(err, service.ErrUserExists) {
+			return nil, status.Error(codes.AlreadyExists, "user exists")
+		}
 		return nil, status.Error(codes.Internal, "internal error")
 	}
 	return &pb.RegisterResponse{
@@ -65,6 +75,9 @@ func (s *AuthGRPCService) IsAdmin(
 
 	isAdmin, err := s.authService.IsAdmin(ctx, req.GetUserUuid())
 	if err != nil {
+		if errors.Is(err, service.ErrUserNotFound) {
+			return nil, status.Error(codes.NotFound, "user not found")
+		}
 		return nil, status.Error(codes.Internal, "internal error")
 	}
 	return &pb.IsAdminResponse{

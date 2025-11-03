@@ -53,7 +53,7 @@ func (s *AuthService) Login(
 			return "", service.ErrInvalidCredentials
 		}
 		s.logger.Error("Failed to get user")
-		return "", err
+		return "", service.ErrInternal
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PassHash), []byte(password)); err != nil {
@@ -68,10 +68,10 @@ func (s *AuthService) Login(
 				"App not found",
 				slog.Int("app_id", int(appId)),
 			)
-			return "", repository.ErrAppNotFound
+			return "", service.ErrAppNotFound
 		}
 		s.logger.Warn("Failed to get app")
-		return "", err
+		return "", service.ErrInternal
 	}
 
 	s.logger.Info("User logged in successfully")
@@ -92,7 +92,7 @@ func (s *AuthService) Register(
 	passHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		s.logger.Error("Failed to generate password hash")
-		return "", err
+		return "", service.ErrInternal
 	}
 
 	uuid, err := s.userRepo.Create(ctx, email, string(passHash))
@@ -102,10 +102,13 @@ func (s *AuthService) Register(
 				"User exists",
 				slog.String("email", email),
 			)
-			return "", err
+			return "", service.ErrUserExists
 		}
-		s.logger.Error("Failed to save user")
-		return "", err
+		s.logger.Error(
+			"Failed to save user",
+			slog.String("error", err.Error()),
+		)
+		return "", service.ErrInternal
 	}
 	return uuid, nil
 }
@@ -136,9 +139,9 @@ func (s *AuthService) IsAdmin(
 				"User not found",
 				slog.String("uuid", uuid),
 			)
-			return false, err
+			return false, service.ErrUserNotFound
 		}
-		return false, err
+		return false, service.ErrInternal
 	}
 	s.logger.Info(
 		"Successfully check user is admin",
