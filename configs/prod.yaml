@@ -1,6 +1,7 @@
 port: 50051
 timeout: 30s
-token_ttl: 1h
+access_token_ttl: 15m
+refresh_token_ttl: 10800m
 database:
   sslmode: disable
 redis:
