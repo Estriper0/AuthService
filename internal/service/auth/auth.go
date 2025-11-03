@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"strconv"
 
+	"github.com/Estriper0/auth_service/internal/cache"
 	"github.com/Estriper0/auth_service/internal/config"
 	"github.com/Estriper0/auth_service/internal/jwt"
-	"github.com/Estriper0/auth_service/internal/redis"
 	"github.com/Estriper0/auth_service/internal/repository"
 	"github.com/Estriper0/auth_service/internal/service"
 	"golang.org/x/crypto/bcrypt"
@@ -19,10 +19,10 @@ type AuthService struct {
 	config   *config.Config
 	userRepo repository.IUserRepository
 	appRepo  repository.IAppRepository
-	cache    redis.Cache
+	cache    cache.Cache
 }
 
-func New(logger *slog.Logger, config *config.Config, userRepo repository.IUserRepository, appRepo repository.IAppRepository, cache redis.Cache) *AuthService {
+func New(logger *slog.Logger, config *config.Config, userRepo repository.IUserRepository, appRepo repository.IAppRepository, cache cache.Cache) *AuthService {
 	return &AuthService{
 		logger:   logger,
 		config:   config,

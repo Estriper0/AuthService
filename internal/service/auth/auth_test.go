@@ -8,10 +8,10 @@ import (
 
 	"log/slog"
 
+	redis "github.com/Estriper0/auth_service/internal/cache/mocks"
 	"github.com/Estriper0/auth_service/internal/config"
 	jwt_service "github.com/Estriper0/auth_service/internal/jwt"
 	"github.com/Estriper0/auth_service/internal/models"
-	"github.com/Estriper0/auth_service/internal/redis"
 	"github.com/Estriper0/auth_service/internal/repository"
 	"github.com/Estriper0/auth_service/internal/repository/database/mocks"
 	srv "github.com/Estriper0/auth_service/internal/service"

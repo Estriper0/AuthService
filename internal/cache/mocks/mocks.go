@@ -2,7 +2,7 @@
 // Source: cache.go
 
 // Package redis is a generated GoMock package.
-package redis
+package mocks
 
 import (
 	context "context"

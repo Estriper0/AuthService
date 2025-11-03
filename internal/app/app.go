@@ -3,8 +3,8 @@ package app
 import (
 	"log/slog"
 
+	rd "github.com/Estriper0/auth_service/internal/cache/redis"
 	"github.com/Estriper0/auth_service/internal/config"
-	rd "github.com/Estriper0/auth_service/internal/redis"
 	db "github.com/Estriper0/auth_service/internal/repository/database"
 	app_repo "github.com/Estriper0/auth_service/internal/repository/database/app"
 	user_repo "github.com/Estriper0/auth_service/internal/repository/database/user"
