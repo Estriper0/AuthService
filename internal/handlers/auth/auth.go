@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"github.com/Estriper0/auth_service/internal/service"
-	pb "github.com/Estriper0/protobuf_eventhub/gen/auth"
+	pb "github.com/Estriper0/protobuf/gen/auth"
 	"github.com/asaskevich/govalidator"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -29,19 +29,17 @@ func (s *AuthGRPCService) Login(
 		return nil, err
 	}
 
-	token, err := s.authService.Login(ctx, req.GetEmail(), req.GetPassword(), req.GetAppId())
+	accessToken, refreshToken, err := s.authService.Login(ctx, req.GetEmail(), req.GetPassword())
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidCredentials) {
 			return nil, status.Error(codes.InvalidArgument, "invalid credentials")
-		}
-		if errors.Is(err, service.ErrAppNotFound) {
-			return nil, status.Error(codes.NotFound, "app not found")
 		}
 		return nil, status.Error(codes.Internal, "internal error")
 	}
 
 	return &pb.LoginResponse{
-		Token: token,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
 	}, nil
 }
 
@@ -84,6 +82,13 @@ func (s *AuthGRPCService) IsAdmin(
 		IsAdmin: isAdmin,
 	}, nil
 }
+
+// func (s *AuthGRPCService) Logout(
+// 	ctx context.Context,
+// 	req *pb.LogoutRequest,
+// ) (*pb.EmptyRequest, error) {
+
+// }
 
 func validateLogin(req *pb.LoginRequest) error {
 	if !govalidator.IsEmail(req.GetEmail()) {

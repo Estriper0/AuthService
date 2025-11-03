@@ -6,7 +6,6 @@ import (
 	rd "github.com/Estriper0/auth_service/internal/cache/redis"
 	"github.com/Estriper0/auth_service/internal/config"
 	db "github.com/Estriper0/auth_service/internal/repository/database"
-	app_repo "github.com/Estriper0/auth_service/internal/repository/database/app"
 	user_repo "github.com/Estriper0/auth_service/internal/repository/database/user"
 	"github.com/Estriper0/auth_service/internal/server"
 	auth_service "github.com/Estriper0/auth_service/internal/service/auth"
@@ -26,10 +25,9 @@ func New(
 	db := db.GetDB(&config.DB)
 
 	userRepo := user_repo.New(db)
-	appRepo := app_repo.New(db)
 	redisClient := redis.NewClient(&redis.Options{Addr: config.Redis.Addr, Password: config.Redis.Password})
 	cache := rd.New(redisClient)
-	authSevice := auth_service.New(logger, config, userRepo, appRepo, cache)
+	authSevice := auth_service.New(logger, config, userRepo, cache)
 	grpcServer := server.New(logger, config, authSevice)
 
 	return &App{

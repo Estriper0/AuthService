@@ -6,11 +6,3 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE INDEX IF NOT EXISTS idx_email ON users (email);
-
-CREATE TABLE IF NOT EXISTS apps (
-    id INTEGER PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL,
-    secret TEXT NOT NULL UNIQUE
-);
-
-INSERT INTO apps (id, name, secret) VALUES (1, 'event_hub', 'secret_key');

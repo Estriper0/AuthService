@@ -88,6 +88,6 @@ func (s *TestSuite) TearDownSuite() {
 }
 
 func (s *TestSuite) SetupTest() {
-	_, err := s.db.ExecContext(s.ctx, "TRUNCATE TABLE users, apps CASCADE;")
+	_, err := s.db.ExecContext(s.ctx, "TRUNCATE TABLE users CASCADE;")
 	s.Require().NoError(err)
 }

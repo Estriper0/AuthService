@@ -7,8 +7,7 @@ type IAuthService interface {
 		ctx context.Context,
 		email string,
 		password string,
-		appId int32,
-	) (string, error)
+	) (string, string, error)
 
 	Register(
 		ctx context.Context,

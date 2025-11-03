@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"strconv"
 
 	"github.com/Estriper0/auth_service/internal/cache"
 	"github.com/Estriper0/auth_service/internal/config"
@@ -18,16 +17,14 @@ type AuthService struct {
 	logger   *slog.Logger
 	config   *config.Config
 	userRepo repository.IUserRepository
-	appRepo  repository.IAppRepository
 	cache    cache.Cache
 }
 
-func New(logger *slog.Logger, config *config.Config, userRepo repository.IUserRepository, appRepo repository.IAppRepository, cache cache.Cache) *AuthService {
+func New(logger *slog.Logger, config *config.Config, userRepo repository.IUserRepository, cache cache.Cache) *AuthService {
 	return &AuthService{
 		logger:   logger,
 		config:   config,
 		userRepo: userRepo,
-		appRepo:  appRepo,
 		cache:    cache,
 	}
 }
@@ -36,8 +33,7 @@ func (s *AuthService) Login(
 	ctx context.Context,
 	email string,
 	password string,
-	appId int32,
-) (string, error) {
+) (string, string, error) {
 	s.logger.Info(
 		"Logginnig user",
 		slog.String("email", email),
@@ -50,33 +46,21 @@ func (s *AuthService) Login(
 				"User not found",
 				slog.String("email", email),
 			)
-			return "", service.ErrInvalidCredentials
+			return "", "", service.ErrInvalidCredentials
 		}
 		s.logger.Error("Failed to get user")
-		return "", service.ErrInternal
+		return "", "", service.ErrInternal
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PassHash), []byte(password)); err != nil {
 		s.logger.Info("Invalid credentials")
-		return "", service.ErrInvalidCredentials
-	}
-
-	app, err := s.appRepo.GetByID(ctx, appId)
-	if err != nil {
-		if errors.Is(err, repository.ErrAppNotFound) {
-			s.logger.Warn(
-				"App not found",
-				slog.Int("app_id", int(appId)),
-			)
-			return "", service.ErrAppNotFound
-		}
-		s.logger.Warn("Failed to get app")
-		return "", service.ErrInternal
+		return "", "", service.ErrInvalidCredentials
 	}
 
 	s.logger.Info("User logged in successfully")
 
-	return jwt.NewToken(user, app, s.config.TokenTTL), nil
+	return jwt.NewAccessToken(user, s.config.AccessTokenSecret, s.config.AccessTokenTTL),
+		jwt.NewRefreshToken(user, s.config.RefreshTokenSecret, s.config.RefreshTokenTTL), nil
 }
 
 func (s *AuthService) Register(
@@ -121,16 +105,6 @@ func (s *AuthService) IsAdmin(
 		"Checking user is admin",
 		slog.String("uuid", uuid),
 	)
-	isAdminCache, err := s.cache.Get(ctx, uuid)
-	if err == nil {
-		s.logger.Info(
-			"Successfully check user is admin in cache",
-			slog.String("uuid", uuid),
-			slog.String("is_admin", isAdminCache),
-		)
-		res, _ := strconv.ParseBool(isAdminCache)
-		return res, nil
-	}
 
 	isAdmin, err := s.userRepo.IsAdmin(ctx, uuid)
 	if err != nil {
@@ -149,12 +123,11 @@ func (s *AuthService) IsAdmin(
 		slog.Bool("is_admin", isAdmin),
 	)
 
-	err = s.cache.Set(ctx, uuid, isAdmin, s.config.Redis.CacheTTL)
-	if err != nil {
-		s.logger.Warn("Failed to add to cache")
-	} else {
-		s.logger.Info("Successfully added to cache")
-	}
+	s.logger.Info("Successfully added to cache")
 
 	return isAdmin, nil
+}
+
+func (s *AuthService) Logout(ctx context.Context, refreshToken string) {
+	s.cache.Set(ctx, refreshToken, true, s.config.RefreshTokenTTL)
 }

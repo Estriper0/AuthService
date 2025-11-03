@@ -27,15 +27,15 @@ func TestAuthService_Login(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockUserRepo := mocks.NewMockIUserRepository(ctrl)
-	mockAppRepo := mocks.NewMockIAppRepository(ctrl)
 	mockRedis := redis.NewMockCache(ctrl)
 
 	logger := slog.Default()
 	cfg := &config.Config{
-		TokenTTL: 24 * time.Hour,
+		AccessTokenTTL:    24 * time.Hour,
+		AccessTokenSecret: "secret",
 	}
 
-	service := New(logger, cfg, mockUserRepo, mockAppRepo, mockRedis)
+	service := New(logger, cfg, mockUserRepo, mockRedis)
 
 	ctx := context.Background()
 
@@ -45,17 +45,11 @@ func TestAuthService_Login(t *testing.T) {
 		Email:    "test@example.com",
 		PassHash: string(hashedPassword),
 	}
-	app := models.App{
-		ID:     1,
-		Name:   "Test App",
-		Secret: "Secret",
-	}
 
 	tests := []struct {
 		name          string
 		email         string
 		password      string
-		appID         int32
 		setupMocks    func()
 		expectedToken string
 		expectedErr   error
@@ -64,61 +58,37 @@ func TestAuthService_Login(t *testing.T) {
 			name:     "successful login",
 			email:    "test@example.com",
 			password: "validpassword",
-			appID:    1,
 			setupMocks: func() {
 				mockUserRepo.EXPECT().
 					GetByEmail(ctx, "test@example.com").
 					Return(user, nil)
-
-				mockAppRepo.EXPECT().
-					GetByID(ctx, int32(1)).
-					Return(app, nil)
 			},
-			expectedToken: jwt_service.NewToken(user, app, cfg.TokenTTL),
+			expectedToken: jwt_service.NewAccessToken(user, cfg.AccessTokenSecret, cfg.AccessTokenTTL),
 			expectedErr:   nil,
 		},
 		{
 			name:     "invalid password",
 			email:    "test@example.com",
 			password: "wrongpassword",
-			appID:    1,
 			setupMocks: func() {
 				mockUserRepo.EXPECT().
 					GetByEmail(ctx, "test@example.com").
 					Return(user, nil)
 			},
-			expectedToken: jwt_service.NewToken(user, app, cfg.TokenTTL),
+			expectedToken: jwt_service.NewAccessToken(user, cfg.AccessTokenSecret, cfg.AccessTokenTTL),
 			expectedErr:   srv.ErrInvalidCredentials,
 		},
 		{
 			name:     "user not found",
 			email:    "unknown@example.com",
 			password: "anypassword",
-			appID:    1,
 			setupMocks: func() {
 				mockUserRepo.EXPECT().
 					GetByEmail(ctx, "unknown@example.com").
 					Return(models.User{}, repository.ErrUserNotFound)
 			},
-			expectedToken: jwt_service.NewToken(user, app, cfg.TokenTTL),
+			expectedToken: jwt_service.NewAccessToken(user, cfg.AccessTokenSecret, cfg.AccessTokenTTL),
 			expectedErr:   srv.ErrInvalidCredentials,
-		},
-		{
-			name:     "app not found",
-			email:    "test@example.com",
-			password: "validpassword",
-			appID:    999,
-			setupMocks: func() {
-				mockUserRepo.EXPECT().
-					GetByEmail(ctx, "test@example.com").
-					Return(user, nil)
-
-				mockAppRepo.EXPECT().
-					GetByID(ctx, int32(999)).
-					Return(models.App{}, repository.ErrAppNotFound)
-			},
-			expectedToken: jwt_service.NewToken(user, app, cfg.TokenTTL),
-			expectedErr:   repository.ErrAppNotFound,
 		},
 	}
 
@@ -126,7 +96,7 @@ func TestAuthService_Login(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupMocks()
 
-			token, err := service.Login(ctx, tt.email, tt.password, tt.appID)
+			token, _, err := service.Login(ctx, tt.email, tt.password)
 
 			if tt.expectedErr != nil {
 				assert.Error(t, err)
@@ -136,7 +106,7 @@ func TestAuthService_Login(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotEmpty(t, token)
 				tokenParsed, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
-					return []byte(app.Secret), nil
+					return []byte(cfg.AccessTokenSecret), nil
 				})
 				require.NoError(t, err)
 
@@ -144,8 +114,6 @@ func TestAuthService_Login(t *testing.T) {
 				require.True(t, ok)
 
 				assert.Equal(t, user.UUID, claims["user_id"])
-				assert.Equal(t, user.Email, claims["email"])
-				assert.Equal(t, float64(app.ID), claims["app_id"])
 			}
 		})
 	}
@@ -156,13 +124,12 @@ func TestAuthService_Register(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockUserRepo := mocks.NewMockIUserRepository(ctrl)
-	mockAppRepo := mocks.NewMockIAppRepository(ctrl)
 	mockRedis := redis.NewMockCache(ctrl)
 
 	logger := slog.Default()
 	cfg := &config.Config{}
 
-	service := New(logger, cfg, mockUserRepo, mockAppRepo, mockRedis)
+	service := New(logger, cfg, mockUserRepo, mockRedis)
 
 	ctx := context.Background()
 
@@ -227,13 +194,12 @@ func TestAuthService_IsAdmin(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockUserRepo := mocks.NewMockIUserRepository(ctrl)
-	mockAppRepo := mocks.NewMockIAppRepository(ctrl)
 	mockRedis := redis.NewMockCache(ctrl)
 
 	logger := slog.Default()
 	cfg := &config.Config{}
 
-	service := New(logger, cfg, mockUserRepo, mockAppRepo, mockRedis)
+	service := New(logger, cfg, mockUserRepo, mockRedis)
 
 	ctx := context.Background()
 
@@ -293,10 +259,6 @@ func TestAuthService_IsAdmin(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupMocks()
-			mockRedis.EXPECT().Get(gomock.Any(), gomock.Any()).Return("", errors.New("Not found"))
-			if tt.expectedErr == nil {
-				mockRedis.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-			}
 
 			isAdmin, err := service.IsAdmin(ctx, tt.uuid)
 
