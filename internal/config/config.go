@@ -9,12 +9,15 @@ import (
 )
 
 type Config struct {
-	Env      string        `mapstructure:"env"`
-	Port     int           `mapstructure:"port"`
-	Timeout  time.Duration `mapstructure:"timeout"`
-	TokenTTL time.Duration `mapstructure:"token_ttl"`
-	DB       Database      `mapstructure:"database"`
-	Redis    Redis         `mapstructure:"redis"`
+	Env                string        `mapstructure:"env"`
+	Port               int           `mapstructure:"port"`
+	Timeout            time.Duration `mapstructure:"timeout"`
+	AccessTokenTTL     time.Duration `mapstructure:"access_token_ttl"`
+	RefreshTokenTTL    time.Duration `mapstructure:"refresh_token_ttl"`
+	AccessTokenSecret  string        `mapstructure:"access_token_secret"`
+	RefreshTokenSecret string        `mapstructure:"refresh_token_secret"`
+	DB                 Database      `mapstructure:"database"`
+	Redis              Redis         `mapstructure:"redis"`
 }
 
 type Database struct {
@@ -29,7 +32,7 @@ type Database struct {
 type Redis struct {
 	Addr     string        `mapstructure:"addr"`
 	CacheTTL time.Duration `mapstructure:"cache_ttl"`
-	Password string `mapstructure:"password"`
+	Password string        `mapstructure:"password"`
 }
 
 func New() *Config {
@@ -56,6 +59,8 @@ func New() *Config {
 	viper.BindEnv("database.dbpassword", "DB_PASSWORD")
 	viper.BindEnv("redis.addr", "REDIS_ADDR")
 	viper.BindEnv("redis.password", "REDIS_PASSWORD")
+	viper.BindEnv("access_token_secret", "ACCESS_TOKEN_SECRET")
+	viper.BindEnv("refresh_token_secret", "REFRESH_TOKEN_SECRET")
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {
