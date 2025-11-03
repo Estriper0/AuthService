@@ -22,7 +22,7 @@ services:
   
   migrations:
     <<: *base
-    container_name: db_migrations
+    container_name: auth_migrations
     build:
       context: .
       dockerfile: Dockerfile
@@ -34,7 +34,7 @@ services:
     command: ["./migrate"]
 
   postgres:
-    container_name: db
+    container_name: auth_db
     image: postgres:18.0-alpine3.22
     restart: unless-stopped
     environment:
@@ -51,6 +51,7 @@ services:
 
   redis:
     <<: *base
+    container_name: auth_redis
     image: redis:7-alpine
     ports:
       - "6379:6379"
@@ -58,8 +59,8 @@ services:
       - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "$REDIS_PASSWORD", "ping"]
-      interval: 30s
-      timeout: 10s
+      interval: 5s
+      timeout: 5s
       retries: 5
     
 volumes:
