@@ -19,4 +19,14 @@ type IAuthService interface {
 		ctx context.Context,
 		uuid string,
 	) (bool, error)
+
+	Logout(
+		ctx context.Context,
+		refreshToken string,
+	) error
+
+	Refresh(
+		ctx context.Context,
+		refreshToken string,
+	) (string, string, error)
 }

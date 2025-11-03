@@ -1,17 +1,17 @@
 package jwt
 
 import (
+	"fmt"
 	"time"
 
-	"github.com/Estriper0/auth_service/internal/models"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
-func NewAccessToken(user models.User, secret string, duration time.Duration) string {
+func NewAccessToken(user_id string, secret string, duration time.Duration) string {
 	claims := jwt.MapClaims{}
 
-	claims["user_id"] = user.UUID
+	claims["user_id"] = user_id
 	claims["exp"] = time.Now().Add(duration).Unix()
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -21,10 +21,10 @@ func NewAccessToken(user models.User, secret string, duration time.Duration) str
 	return tokenString
 }
 
-func NewRefreshToken(user models.User, secret string, duration time.Duration) string {
+func NewRefreshToken(user_id string, secret string, duration time.Duration) string {
 	claims := jwt.MapClaims{}
 
-	claims["user_id"] = user.UUID
+	claims["user_id"] = user_id
 	claims["exp"] = time.Now().Add(duration).Unix()
 	claims["jti"] = uuid.New().String()
 
@@ -33,4 +33,26 @@ func NewRefreshToken(user models.User, secret string, duration time.Duration) st
 	tokenString, _ := token.SignedString([]byte(secret))
 
 	return tokenString
+}
+
+func ValidRefreshToken(refreshToken string, secret string) (string, bool) {
+	token, err := jwt.Parse(refreshToken, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(secret), nil
+	})
+
+	if err != nil {
+		return "", false
+	}
+
+	if !token.Valid {
+		return "", false
+	}
+
+	claims, _ := token.Claims.(jwt.MapClaims)
+	user_id, _ := claims["user_id"].(string)
+
+	return user_id, true
 }

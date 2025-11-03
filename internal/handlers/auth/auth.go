@@ -83,12 +83,40 @@ func (s *AuthGRPCService) IsAdmin(
 	}, nil
 }
 
-// func (s *AuthGRPCService) Logout(
-// 	ctx context.Context,
-// 	req *pb.LogoutRequest,
-// ) (*pb.EmptyRequest, error) {
+func (s *AuthGRPCService) Logout(
+	ctx context.Context,
+	req *pb.LogoutRequest,
+) (*pb.EmptyRequest, error) {
+	err := s.authService.Logout(ctx, req.RefreshToken)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidToken) {
+			return nil, status.Error(codes.InvalidArgument, "invalid token")
+		}
+		if errors.Is(err, service.ErrRefreshBlacklist) {
+			return nil, status.Error(codes.Internal, "internal error")
+		}
+	}
+	return &pb.EmptyRequest{}, nil
+}
 
-// }
+func (s *AuthGRPCService) Refresh(
+	ctx context.Context,
+	req *pb.RefreshRequest,
+) (*pb.RefreshResponse, error) {
+	accessToken, refreshToken, err := s.authService.Refresh(ctx, req.RefreshToken)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidToken) {
+			return nil, status.Error(codes.InvalidArgument, "invalid token")
+		}
+		if errors.Is(err, service.ErrRefreshBlacklist) {
+			return nil, status.Error(codes.Internal, "internal error")
+		}
+	}
+	return &pb.RefreshResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, nil
+}
 
 func validateLogin(req *pb.LoginRequest) error {
 	if !govalidator.IsEmail(req.GetEmail()) {
@@ -96,9 +124,6 @@ func validateLogin(req *pb.LoginRequest) error {
 	}
 	if req.GetPassword() == "" {
 		return status.Error(codes.InvalidArgument, "password is required")
-	}
-	if req.GetAppId() == 0 {
-		return status.Error(codes.InvalidArgument, "app_id is required")
 	}
 	return nil
 }

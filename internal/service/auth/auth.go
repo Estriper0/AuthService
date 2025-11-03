@@ -10,6 +10,7 @@ import (
 	"github.com/Estriper0/auth_service/internal/jwt"
 	"github.com/Estriper0/auth_service/internal/repository"
 	"github.com/Estriper0/auth_service/internal/service"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -59,8 +60,8 @@ func (s *AuthService) Login(
 
 	s.logger.Info("User logged in successfully")
 
-	return jwt.NewAccessToken(user, s.config.AccessTokenSecret, s.config.AccessTokenTTL),
-		jwt.NewRefreshToken(user, s.config.RefreshTokenSecret, s.config.RefreshTokenTTL), nil
+	return jwt.NewAccessToken(user.UUID, s.config.AccessTokenSecret, s.config.AccessTokenTTL),
+		jwt.NewRefreshToken(user.UUID, s.config.RefreshTokenSecret, s.config.RefreshTokenTTL), nil
 }
 
 func (s *AuthService) Register(
@@ -128,6 +129,65 @@ func (s *AuthService) IsAdmin(
 	return isAdmin, nil
 }
 
-func (s *AuthService) Logout(ctx context.Context, refreshToken string) {
-	s.cache.Set(ctx, refreshToken, true, s.config.RefreshTokenTTL)
+func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
+	_, err := s.cache.Get(ctx, refreshToken)
+	if err != redis.Nil {
+		s.logger.Warn(
+			"Token in blacklist",
+			slog.String("refresh_token", refreshToken),
+		)
+		return service.ErrInvalidToken
+	}
+	user_id, ok := jwt.ValidRefreshToken(refreshToken, s.config.RefreshTokenSecret)
+	if !ok {
+		s.logger.Warn(
+			"Token is not valid",
+			slog.String("refresh_token", refreshToken),
+		)
+		return service.ErrInvalidToken
+	}
+	err = s.cache.Set(ctx, refreshToken, true, s.config.RefreshTokenTTL)
+	if err != nil {
+		s.logger.Error(
+			"Error adding to blacklist",
+			slog.String("refresh_token", refreshToken),
+		)
+		return service.ErrRefreshBlacklist
+	}
+	s.logger.Error(
+		"Successfully logout user",
+		slog.String("user_id", user_id),
+	)
+	return nil
+}
+
+func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (string, string, error) {
+	_, err := s.cache.Get(ctx, refreshToken)
+	if err != redis.Nil {
+		s.logger.Warn(
+			"Token in blacklist",
+			slog.String("refresh_token", refreshToken),
+		)
+		return "", "", service.ErrInvalidToken
+	}
+	user_id, ok := jwt.ValidRefreshToken(refreshToken, s.config.RefreshTokenSecret)
+	if !ok {
+		s.logger.Warn(
+			"Token is not valid",
+			slog.String("refresh_token", refreshToken),
+		)
+		return "", "", service.ErrInvalidToken
+	}
+
+	err = s.cache.Set(ctx, refreshToken, true, s.config.RefreshTokenTTL)
+	if err != nil {
+		s.logger.Error(
+			"Error adding to blacklist",
+			slog.String("refresh_token", refreshToken),
+		)
+		return "", "", service.ErrRefreshBlacklist
+	}
+
+	return jwt.NewAccessToken(user_id, s.config.AccessTokenSecret, s.config.AccessTokenTTL),
+		jwt.NewRefreshToken(user_id, s.config.RefreshTokenSecret, s.config.RefreshTokenTTL), nil
 }

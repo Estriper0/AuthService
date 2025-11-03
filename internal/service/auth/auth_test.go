@@ -63,7 +63,7 @@ func TestAuthService_Login(t *testing.T) {
 					GetByEmail(ctx, "test@example.com").
 					Return(user, nil)
 			},
-			expectedToken: jwt_service.NewAccessToken(user, cfg.AccessTokenSecret, cfg.AccessTokenTTL),
+			expectedToken: jwt_service.NewAccessToken(user.UUID, cfg.AccessTokenSecret, cfg.AccessTokenTTL),
 			expectedErr:   nil,
 		},
 		{
@@ -75,7 +75,7 @@ func TestAuthService_Login(t *testing.T) {
 					GetByEmail(ctx, "test@example.com").
 					Return(user, nil)
 			},
-			expectedToken: jwt_service.NewAccessToken(user, cfg.AccessTokenSecret, cfg.AccessTokenTTL),
+			expectedToken: jwt_service.NewAccessToken(user.UUID, cfg.AccessTokenSecret, cfg.AccessTokenTTL),
 			expectedErr:   srv.ErrInvalidCredentials,
 		},
 		{
@@ -87,7 +87,7 @@ func TestAuthService_Login(t *testing.T) {
 					GetByEmail(ctx, "unknown@example.com").
 					Return(models.User{}, repository.ErrUserNotFound)
 			},
-			expectedToken: jwt_service.NewAccessToken(user, cfg.AccessTokenSecret, cfg.AccessTokenTTL),
+			expectedToken: jwt_service.NewAccessToken(user.UUID, cfg.AccessTokenSecret, cfg.AccessTokenTTL),
 			expectedErr:   srv.ErrInvalidCredentials,
 		},
 	}
