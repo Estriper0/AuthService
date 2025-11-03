@@ -143,7 +143,7 @@ func TestAuthService_Login(t *testing.T) {
 				claims, ok := tokenParsed.Claims.(jwt.MapClaims)
 				require.True(t, ok)
 
-				assert.Equal(t, user.UUID, claims["uuid"])
+				assert.Equal(t, user.UUID, claims["user_id"])
 				assert.Equal(t, user.Email, claims["email"])
 				assert.Equal(t, float64(app.ID), claims["app_id"])
 			}
@@ -286,7 +286,7 @@ func TestAuthService_IsAdmin(t *testing.T) {
 					Return(false, errors.New("query failed"))
 			},
 			expected:    false,
-			expectedErr: errors.New("query failed"),
+			expectedErr: srv.ErrInternal,
 		},
 	}
 
@@ -304,7 +304,7 @@ func TestAuthService_IsAdmin(t *testing.T) {
 
 			if tt.expectedErr != nil {
 				assert.Error(t, err)
-				assert.EqualError(t, err, tt.expectedErr.Error())
+				assert.Equal(t, err, tt.expectedErr)
 			} else {
 				assert.NoError(t, err)
 			}

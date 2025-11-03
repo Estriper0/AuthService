@@ -8,13 +8,14 @@ import (
 )
 
 func NewToken(user models.User, app models.App, duration time.Duration) string {
-	token := jwt.New(jwt.SigningMethodHS256)
+	claims := jwt.MapClaims{}
 
-	claims := token.Claims.(jwt.MapClaims)
-	claims["uuid"] = user.UUID
+	claims["user_id"] = user.UUID
+	claims["app_id"] = app.ID
 	claims["email"] = user.Email
 	claims["exp"] = time.Now().Add(duration).Unix()
-	claims["app_id"] = app.ID
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	tokenString, _ := token.SignedString([]byte(app.Secret))
 

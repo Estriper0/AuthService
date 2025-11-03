@@ -12,3 +12,5 @@ CREATE TABLE IF NOT EXISTS apps (
     name TEXT UNIQUE NOT NULL,
     secret TEXT NOT NULL UNIQUE
 );
+
+INSERT INTO apps (id, name, secret) VALUES (1, 'event_hub', 'secret_key');

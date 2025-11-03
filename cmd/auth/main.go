@@ -7,7 +7,7 @@ import (
 
 	"github.com/Estriper0/auth_service/internal/app"
 	"github.com/Estriper0/auth_service/internal/config"
-	"github.com/Estriper0/auth_service/pkg/logger"
+	"github.com/Estriper0/auth_service/internal/logger"
 )
 
 func main() {
