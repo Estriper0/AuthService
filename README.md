@@ -1,6 +1,6 @@
 # Auth Microservice (Go + gRPC)
 
-Микросервис авторизации на Go с использованием gRPC. Реализует регистрацию, вход и проверку административных прав пользователя. Построен по принципам **чистой архитектуры**, включает кэширование через Redis, тесты (юнит + интеграционные) и контейнеризацию через Docker.
+Микросервис авторизации на Go с использованием gRPC. Реализует регистрацию, вход, выход, обновление токенов и проверку административных прав пользователя. Построен по принципам **чистой архитектуры**, включает кэширование через Redis, тесты (юнит + интеграционные) и контейнеризацию через Docker.
 
 ---
 
@@ -10,7 +10,7 @@
 - **gRPC**
 - **Protocol Buffers**
 - **PostgreSQL** — основное хранилище пользователей
-- **Redis** — кэширование результата `IsAdmin`
+- **Redis** — добавление/проверка `Refresh token` на blacklist
 - **Docker & Docker Compose**
 
 ---
@@ -34,20 +34,18 @@ configs/                    # Конфигурации
     └── ...
 internal/                   # Внутренняя логика (не экспортируется)
   ├── app/                  # Структура приложения
+  ├── logger/               # Логгер
   ├── config/               # Загрузка конфига
   ├── handlers/             # Обработчики (эндпоинты)
   ├── jwt/                  # Работа с JWT
   ├── models/               # Структуры данных
-  ├── redis/                # Работа с Redis
+  ├── cache/                # Работа с Redis
   └── repository/
   │      ├── errors.go      # Ошибки репозитория
   │      ├── repository.go   # Интерфейсы
   │      └── database/      # Репозитории для работы с БД
-  │           ├── app/      # AppRepository
   │           ├── mocks/    # Моки для тестов (mockgen)
-  │           └── user/     # UserRepository (CRUD)
-  │     
-  │
+  │           └── user/     # UserRepository (CRUD)   
   ├── server/
   │   └── server.go         # GRPC-сервер
   │
@@ -56,11 +54,6 @@ internal/                   # Внутренняя логика (не экспо
          ├── service.go     # Интерфейсы
          └── auth/          # Сервис Auth
 migrations/                 # Файлы миграций
-pkg/
-├── db/                     # Утилиты для подключения к PostgreSQL
-│   └── db.go
-├── logger/                 # Логгер
-│   └── logger.go
 tests/                      # Интеграционные тесты
 
 ```
@@ -72,8 +65,10 @@ tests/                      # Интеграционные тесты
 | Метод       | Входные данные               | Ответ               | Описание |
 |-------------|------------------------------|---------------------|---------|
 | `Register`  | `email`, `password`          | `user_uuid`         | Регистрация пользователя |
-| `Login`     | `email`, `password`, `app_id`| `token` (JWT)       | Аутентификация |
+| `Login`     | `email`, `password`, `app_id`| `access_token`, `refresh_token`       | Аутентификация |
 | `IsAdmin`   | `user_uuid`                  | `is_admin: bool`    | Проверка админ-прав (с кэшем) |
+| `Refresh`   | `refresh_token`              | `access_token`, `refresh_token` | Обновление токенов |
+| `Logout`    | `refresh_token`              | `refresh_token`     | Выход пользователя |
 
 ---
 
@@ -87,13 +82,14 @@ tests/                      # Интеграционные тесты
    ```env
    APP_ENV=local
 
-   DB_HOST=localhost
-   DB_PORT=5432
-   DB_NAME=db_name
-   DB_USER=postgres
-   DB_PASSWORD=12345
+    DB_HOST=localhost
+    DB_PORT=5432
+    DB_NAME=db_name
+    DB_USER=postgres
+    DB_PASSWORD=12345
 
-   REDIS_ADDR=redis:6379
+    REDIS_ADDR=redis:6379
+    REDIS_PASSWORD=12345
    ```
 
 3. **Запусти с помощью Docker Compose**:
@@ -115,4 +111,4 @@ go test ./... -v
 go test -short ./... -v
 ```
 
-> Интеграционные тесты используют реальные PostgreSQL и Redis.
+> Интеграционные тесты используют реальный PostgreSQL.
