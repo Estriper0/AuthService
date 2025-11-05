@@ -23,10 +23,3 @@ type IUserRepository interface {
 		uuid string,
 	) (bool, error)
 }
-
-type IAppRepository interface {
-	GetByID(
-		ctx context.Context,
-		id int32,
-	) (models.App, error)
-}
