@@ -43,7 +43,7 @@ func (s *AuthService) Login(
 	user, err := s.userRepo.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, repository.ErrUserNotFound) {
-			s.logger.Warn(
+			s.logger.Info(
 				"User not found",
 				slog.String("email", email),
 			)
@@ -83,7 +83,7 @@ func (s *AuthService) Register(
 	uuid, err := s.userRepo.Create(ctx, email, string(passHash))
 	if err != nil {
 		if errors.Is(err, repository.ErrUserExists) {
-			s.logger.Warn(
+			s.logger.Info(
 				"User exists",
 				slog.String("email", email),
 			)
@@ -110,7 +110,7 @@ func (s *AuthService) IsAdmin(
 	isAdmin, err := s.userRepo.IsAdmin(ctx, uuid)
 	if err != nil {
 		if errors.Is(err, repository.ErrUserNotFound) {
-			s.logger.Warn(
+			s.logger.Info(
 				"User not found",
 				slog.String("uuid", uuid),
 			)
@@ -132,7 +132,7 @@ func (s *AuthService) IsAdmin(
 func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
 	_, err := s.cache.Get(ctx, refreshToken)
 	if err != redis.Nil {
-		s.logger.Warn(
+		s.logger.Info(
 			"Token in blacklist",
 			slog.String("refresh_token", refreshToken),
 		)
@@ -140,7 +140,7 @@ func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
 	}
 	user_id, ok := jwt.ValidRefreshToken(refreshToken, s.config.RefreshTokenSecret)
 	if !ok {
-		s.logger.Warn(
+		s.logger.Info(
 			"Token is not valid",
 			slog.String("refresh_token", refreshToken),
 		)
@@ -164,7 +164,7 @@ func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
 func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (string, string, error) {
 	_, err := s.cache.Get(ctx, refreshToken)
 	if err != redis.Nil {
-		s.logger.Warn(
+		s.logger.Info(
 			"Token in blacklist",
 			slog.String("refresh_token", refreshToken),
 		)
@@ -172,7 +172,7 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (string,
 	}
 	user_id, ok := jwt.ValidRefreshToken(refreshToken, s.config.RefreshTokenSecret)
 	if !ok {
-		s.logger.Warn(
+		s.logger.Info(
 			"Token is not valid",
 			slog.String("refresh_token", refreshToken),
 		)
