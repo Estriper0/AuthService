@@ -8,10 +8,11 @@ import (
 	"github.com/google/uuid"
 )
 
-func NewAccessToken(user_id string, secret string, duration time.Duration) string {
+func NewAccessToken(user_id string, isAdmin bool, secret string, duration time.Duration) string {
 	claims := jwt.MapClaims{}
 
 	claims["user_id"] = user_id
+	claims["is_admin"] = isAdmin
 	claims["exp"] = time.Now().Add(duration).Unix()
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -21,10 +22,11 @@ func NewAccessToken(user_id string, secret string, duration time.Duration) strin
 	return tokenString
 }
 
-func NewRefreshToken(user_id string, secret string, duration time.Duration) string {
+func NewRefreshToken(user_id string, isAdmin bool, secret string, duration time.Duration) string {
 	claims := jwt.MapClaims{}
 
 	claims["user_id"] = user_id
+	claims["is_admin"] = isAdmin
 	claims["exp"] = time.Now().Add(duration).Unix()
 	claims["jti"] = uuid.New().String()
 
@@ -35,7 +37,7 @@ func NewRefreshToken(user_id string, secret string, duration time.Duration) stri
 	return tokenString
 }
 
-func ValidRefreshToken(refreshToken string, secret string) (string, bool) {
+func ValidRefreshToken(refreshToken string, secret string) (string, bool, bool) {
 	token, err := jwt.Parse(refreshToken, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -44,15 +46,16 @@ func ValidRefreshToken(refreshToken string, secret string) (string, bool) {
 	})
 
 	if err != nil {
-		return "", false
+		return "", false, false
 	}
 
 	if !token.Valid {
-		return "", false
+		return "", false, false
 	}
 
 	claims, _ := token.Claims.(jwt.MapClaims)
 	user_id, _ := claims["user_id"].(string)
+	is_admin, _ := claims["is_admin"].(bool)
 
-	return user_id, true
+	return user_id, is_admin, true
 }

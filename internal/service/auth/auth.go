@@ -52,6 +52,18 @@ func (s *AuthService) Login(
 		s.logger.Error("Failed to get user")
 		return "", "", service.ErrInternal
 	}
+	isAdmin, err := s.userRepo.IsAdmin(ctx, user.UUID)
+	if err != nil {
+		if errors.Is(err, repository.ErrUserNotFound) {
+			s.logger.Info(
+				"User not found",
+				slog.String("uuid", user.UUID),
+			)
+			return "", "", service.ErrInvalidCredentials
+		}
+		s.logger.Error("Failed to check user role")
+		return "", "", service.ErrInternal
+	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PassHash), []byte(password)); err != nil {
 		s.logger.Info("Invalid credentials")
@@ -60,8 +72,8 @@ func (s *AuthService) Login(
 
 	s.logger.Info("User logged in successfully")
 
-	return jwt.NewAccessToken(user.UUID, s.config.AccessTokenSecret, s.config.AccessTokenTTL),
-		jwt.NewRefreshToken(user.UUID, s.config.RefreshTokenSecret, s.config.RefreshTokenTTL), nil
+	return jwt.NewAccessToken(user.UUID, isAdmin, s.config.AccessTokenSecret, s.config.AccessTokenTTL),
+		jwt.NewRefreshToken(user.UUID, isAdmin, s.config.RefreshTokenSecret, s.config.RefreshTokenTTL), nil
 }
 
 func (s *AuthService) Register(
@@ -138,7 +150,7 @@ func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
 		)
 		return service.ErrInvalidToken
 	}
-	user_id, ok := jwt.ValidRefreshToken(refreshToken, s.config.RefreshTokenSecret)
+	user_id, _, ok := jwt.ValidRefreshToken(refreshToken, s.config.RefreshTokenSecret)
 	if !ok {
 		s.logger.Info(
 			"Token is not valid",
@@ -170,7 +182,7 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (string,
 		)
 		return "", "", service.ErrInvalidToken
 	}
-	user_id, ok := jwt.ValidRefreshToken(refreshToken, s.config.RefreshTokenSecret)
+	user_id, is_admin, ok := jwt.ValidRefreshToken(refreshToken, s.config.RefreshTokenSecret)
 	if !ok {
 		s.logger.Info(
 			"Token is not valid",
@@ -188,6 +200,6 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (string,
 		return "", "", service.ErrRefreshBlacklist
 	}
 
-	return jwt.NewAccessToken(user_id, s.config.AccessTokenSecret, s.config.AccessTokenTTL),
-		jwt.NewRefreshToken(user_id, s.config.RefreshTokenSecret, s.config.RefreshTokenTTL), nil
+	return jwt.NewAccessToken(user_id, is_admin, s.config.AccessTokenSecret, s.config.AccessTokenTTL),
+		jwt.NewRefreshToken(user_id, is_admin, s.config.RefreshTokenSecret, s.config.RefreshTokenTTL), nil
 }
