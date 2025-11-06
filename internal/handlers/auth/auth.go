@@ -26,7 +26,7 @@ func (s *AuthGRPCService) Login(
 	req *pb.LoginRequest,
 ) (*pb.LoginResponse, error) {
 	if err := validateLogin(req); err != nil {
-		return nil, err
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
 	accessToken, refreshToken, err := s.authService.Login(ctx, req.GetEmail(), req.GetPassword())
@@ -48,7 +48,7 @@ func (s *AuthGRPCService) Register(
 	req *pb.RegisterRequest,
 ) (*pb.RegisterResponse, error) {
 	if err := validateRegister(req); err != nil {
-		return nil, err
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
 	uuid, err := s.authService.Register(ctx, req.GetEmail(), req.GetPassword())
@@ -68,7 +68,7 @@ func (s *AuthGRPCService) IsAdmin(
 	req *pb.IsAdminRequest,
 ) (*pb.IsAdminResponse, error) {
 	if err := validateIsAdmin(req); err != nil {
-		return nil, err
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
 	isAdmin, err := s.authService.IsAdmin(ctx, req.GetUserUuid())
