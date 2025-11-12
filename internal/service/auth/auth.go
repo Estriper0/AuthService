@@ -34,7 +34,7 @@ func (s *AuthService) Login(
 	ctx context.Context,
 	email string,
 	password string,
-) (string, string, error) {
+) (*service.Tokens, error) {
 	s.logger.Info(
 		"Logginnig user",
 		slog.String("email", email),
@@ -47,33 +47,45 @@ func (s *AuthService) Login(
 				"User not found",
 				slog.String("email", email),
 			)
-			return "", "", service.ErrInvalidCredentials
+			return nil, service.ErrInvalidCredentials
 		}
-		s.logger.Error("Failed to get user")
-		return "", "", service.ErrInternal
+		s.logger.Error(
+			"Failed to get user",
+			slog.String("email", email),
+			slog.String("error", err.Error()),
+		)
+		return nil, service.ErrInternal
 	}
 	isAdmin, err := s.userRepo.IsAdmin(ctx, user.UUID)
 	if err != nil {
-		if errors.Is(err, repository.ErrUserNotFound) {
-			s.logger.Info(
-				"User not found",
-				slog.String("uuid", user.UUID),
-			)
-			return "", "", service.ErrInvalidCredentials
-		}
-		s.logger.Error("Failed to check user role")
-		return "", "", service.ErrInternal
+		s.logger.Error(
+			"Failed to check user role",
+			slog.String("email", email),
+			slog.String("error", err.Error()),
+		)
+		return nil, service.ErrInternal
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PassHash), []byte(password)); err != nil {
-		s.logger.Info("Invalid credentials")
-		return "", "", service.ErrInvalidCredentials
+		s.logger.Info(
+			"Invalid password",
+			slog.String("email", email),
+			slog.String("error", err.Error()),
+		)
+		return nil, service.ErrInvalidCredentials
 	}
 
-	s.logger.Info("User logged in successfully")
+	s.logger.Info(
+		"User logged in successfully",
+		slog.String("email", email),
+	)
 
-	return jwt.NewAccessToken(user.UUID, isAdmin, s.config.AccessTokenSecret, s.config.AccessTokenTTL),
-		jwt.NewRefreshToken(user.UUID, isAdmin, s.config.RefreshTokenSecret, s.config.RefreshTokenTTL), nil
+	tokens := &service.Tokens{
+		AccessToken:  jwt.NewToken(user.UUID, isAdmin, s.config.AccessTokenSecret, s.config.AccessTokenTTL),
+		RefreshToken: jwt.NewToken(user.UUID, isAdmin, s.config.RefreshTokenSecret, s.config.RefreshTokenTTL),
+	}
+
+	return tokens, nil
 }
 
 func (s *AuthService) Register(
@@ -88,11 +100,15 @@ func (s *AuthService) Register(
 
 	passHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		s.logger.Error("Failed to generate password hash")
+		s.logger.Error(
+			"Failed to generate password hash",
+			slog.String("email", email),
+			slog.String("error", err.Error()),
+		)
 		return "", service.ErrInternal
 	}
 
-	uuid, err := s.userRepo.Create(ctx, email, string(passHash))
+	uuid, err := s.userRepo.Create(ctx, email, string(passHash), false)
 	if err != nil {
 		if errors.Is(err, repository.ErrUserExists) {
 			s.logger.Info(
@@ -103,10 +119,16 @@ func (s *AuthService) Register(
 		}
 		s.logger.Error(
 			"Failed to save user",
+			slog.String("email", email),
 			slog.String("error", err.Error()),
 		)
 		return "", service.ErrInternal
 	}
+
+	s.logger.Info(
+		"User registered is successfully",
+		slog.String("email", email),
+	)
 	return uuid, nil
 }
 
@@ -128,6 +150,11 @@ func (s *AuthService) IsAdmin(
 			)
 			return false, service.ErrUserNotFound
 		}
+		s.logger.Error(
+			"Failed to checking user's role",
+			slog.String("uuid", uuid),
+			slog.String("error", err.Error()),
+		)
 		return false, service.ErrInternal
 	}
 	s.logger.Info(
@@ -135,8 +162,6 @@ func (s *AuthService) IsAdmin(
 		slog.String("uuid", uuid),
 		slog.Bool("is_admin", isAdmin),
 	)
-
-	s.logger.Info("Successfully added to cache")
 
 	return isAdmin, nil
 }
@@ -148,23 +173,25 @@ func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
 			"Token in blacklist",
 			slog.String("refresh_token", refreshToken),
 		)
-		return service.ErrInvalidToken
+		return service.ErrRefreshBlacklist
 	}
-	user_id, _, ok := jwt.ValidRefreshToken(refreshToken, s.config.RefreshTokenSecret)
-	if !ok {
+	claims, err := jwt.ValidRefreshToken(refreshToken, s.config.RefreshTokenSecret)
+	if err != nil {
 		s.logger.Info(
 			"Token is not valid",
 			slog.String("refresh_token", refreshToken),
 		)
 		return service.ErrInvalidToken
 	}
+	user_id, _ := claims["user_id"].(string)
+
 	err = s.cache.Set(ctx, refreshToken, true, s.config.RefreshTokenTTL)
 	if err != nil {
 		s.logger.Error(
 			"Error adding to blacklist",
-			slog.String("refresh_token", refreshToken),
+			slog.String("error", err.Error()),
 		)
-		return service.ErrRefreshBlacklist
+		return service.ErrInternal
 	}
 	s.logger.Error(
 		"Successfully logout user",
@@ -173,33 +200,40 @@ func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
 	return nil
 }
 
-func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (string, string, error) {
+func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*service.Tokens, error) {
 	_, err := s.cache.Get(ctx, refreshToken)
 	if err != redis.Nil {
 		s.logger.Info(
 			"Token in blacklist",
 			slog.String("refresh_token", refreshToken),
 		)
-		return "", "", service.ErrInvalidToken
+		return nil, service.ErrRefreshBlacklist
 	}
-	user_id, is_admin, ok := jwt.ValidRefreshToken(refreshToken, s.config.RefreshTokenSecret)
-	if !ok {
+
+	claims, err := jwt.ValidRefreshToken(refreshToken, s.config.RefreshTokenSecret)
+	if err != nil {
 		s.logger.Info(
 			"Token is not valid",
 			slog.String("refresh_token", refreshToken),
 		)
-		return "", "", service.ErrInvalidToken
+		return nil, service.ErrInvalidToken
 	}
+	user_id, _ := claims["user_id"].(string)
+	is_admin, _ := claims["is_admin"].(bool)
 
 	err = s.cache.Set(ctx, refreshToken, true, s.config.RefreshTokenTTL)
 	if err != nil {
 		s.logger.Error(
 			"Error adding to blacklist",
-			slog.String("refresh_token", refreshToken),
+			slog.String("error", err.Error()),
 		)
-		return "", "", service.ErrRefreshBlacklist
+		return nil, service.ErrInternal
 	}
 
-	return jwt.NewAccessToken(user_id, is_admin, s.config.AccessTokenSecret, s.config.AccessTokenTTL),
-		jwt.NewRefreshToken(user_id, is_admin, s.config.RefreshTokenSecret, s.config.RefreshTokenTTL), nil
+	tokens := &service.Tokens{
+		AccessToken:  jwt.NewToken(user_id, is_admin, s.config.AccessTokenSecret, s.config.AccessTokenTTL),
+		RefreshToken: jwt.NewToken(user_id, is_admin, s.config.RefreshTokenSecret, s.config.RefreshTokenTTL),
+	}
+
+	return tokens, nil
 }

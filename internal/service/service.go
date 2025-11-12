@@ -2,12 +2,17 @@ package service
 
 import "context"
 
+type Tokens struct {
+	AccessToken  string
+	RefreshToken string
+}
+
 type IAuthService interface {
 	Login(
 		ctx context.Context,
 		email string,
 		password string,
-	) (string, string, error)
+	) (*Tokens, error)
 
 	Register(
 		ctx context.Context,
@@ -28,5 +33,5 @@ type IAuthService interface {
 	Refresh(
 		ctx context.Context,
 		refreshToken string,
-	) (string, string, error)
+	) (*Tokens, error)
 }
