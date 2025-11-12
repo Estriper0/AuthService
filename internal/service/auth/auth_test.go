@@ -1,176 +1,137 @@
-package auth
+package auth_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"log/slog"
 
-	redis "github.com/Estriper0/auth_service/internal/cache/mocks"
+	cache_mocks "github.com/Estriper0/auth_service/internal/cache/mocks"
 	"github.com/Estriper0/auth_service/internal/config"
-	jwt_service "github.com/Estriper0/auth_service/internal/jwt"
+	"github.com/Estriper0/auth_service/internal/jwt"
 	"github.com/Estriper0/auth_service/internal/models"
 	"github.com/Estriper0/auth_service/internal/repository"
-	"github.com/Estriper0/auth_service/internal/repository/database/mocks"
-	srv "github.com/Estriper0/auth_service/internal/service"
-	"github.com/golang-jwt/jwt/v5"
+	repo_mocks "github.com/Estriper0/auth_service/internal/repository/mocks"
+	"github.com/Estriper0/auth_service/internal/service"
+	"github.com/Estriper0/auth_service/internal/service/auth"
 	"github.com/golang/mock/gomock"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 )
 
-func TestAuthService_Login(t *testing.T) {
+const (
+	testAccessSecret  = "test-access-secret-1234567890"
+	testRefreshSecret = "test-refresh-secret-1234567890"
+)
+
+func setupTest(t *testing.T) (*auth.AuthService, *repo_mocks.MockIUserRepository, *cache_mocks.MockCache) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	mockRepo := repo_mocks.NewMockIUserRepository(ctrl)
+	mockCache := cache_mocks.NewMockCache(ctrl)
 
-	mockUserRepo := mocks.NewMockIUserRepository(ctrl)
-	mockRedis := redis.NewMockCache(ctrl)
-
-	logger := slog.Default()
 	cfg := &config.Config{
-		AccessTokenTTL:    24 * time.Hour,
-		AccessTokenSecret: "secret",
+		AccessTokenSecret:  testAccessSecret,
+		AccessTokenTTL:     15 * time.Minute,
+		RefreshTokenSecret: testRefreshSecret,
+		RefreshTokenTTL:    7 * 24 * time.Hour,
 	}
 
-	service := New(logger, cfg, mockUserRepo, mockRedis)
-
-	ctx := context.Background()
-
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("validpassword"), bcrypt.DefaultCost)
-	user := models.User{
-		UUID:     "user-123",
-		Email:    "test@example.com",
-		PassHash: string(hashedPassword),
-	}
-	is_admin := false
-
-	tests := []struct {
-		name          string
-		email         string
-		password      string
-		setupMocks    func()
-		expectedToken string
-		expectedErr   error
-	}{
-		{
-			name:     "successful login",
-			email:    "test@example.com",
-			password: "validpassword",
-			setupMocks: func() {
-				mockUserRepo.EXPECT().
-					GetByEmail(ctx, "test@example.com").
-					Return(user, nil)
-				mockUserRepo.EXPECT().
-					IsAdmin(ctx, user.UUID).
-					Return(false, nil)
-			},
-			expectedToken: jwt_service.NewAccessToken(user.UUID, is_admin, cfg.AccessTokenSecret, cfg.AccessTokenTTL),
-			expectedErr:   nil,
-		},
-		{
-			name:     "invalid password",
-			email:    "test@example.com",
-			password: "wrongpassword",
-			setupMocks: func() {
-				mockUserRepo.EXPECT().
-					GetByEmail(ctx, "test@example.com").
-					Return(user, nil)
-				mockUserRepo.EXPECT().
-					IsAdmin(ctx, user.UUID).
-					Return(false, nil)
-			},
-			expectedToken: jwt_service.NewAccessToken(user.UUID, is_admin, cfg.AccessTokenSecret, cfg.AccessTokenTTL),
-			expectedErr:   srv.ErrInvalidCredentials,
-		},
-		{
-			name:     "user not found",
-			email:    "unknown@example.com",
-			password: "anypassword",
-			setupMocks: func() {
-				mockUserRepo.EXPECT().
-					GetByEmail(ctx, "unknown@example.com").
-					Return(models.User{}, repository.ErrUserNotFound)
-			},
-			expectedToken: jwt_service.NewAccessToken(user.UUID, is_admin, cfg.AccessTokenSecret, cfg.AccessTokenTTL),
-			expectedErr:   srv.ErrInvalidCredentials,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-
-			token, _, err := service.Login(ctx, tt.email, tt.password)
-
-			if tt.expectedErr != nil {
-				assert.Error(t, err)
-				assert.Equal(t, tt.expectedErr.Error(), err.Error())
-				assert.Empty(t, token)
-			} else {
-				assert.NoError(t, err)
-				assert.NotEmpty(t, token)
-				tokenParsed, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
-					return []byte(cfg.AccessTokenSecret), nil
-				})
-				require.NoError(t, err)
-
-				claims, ok := tokenParsed.Claims.(jwt.MapClaims)
-				require.True(t, ok)
-
-				assert.Equal(t, user.UUID, claims["user_id"])
-			}
-		})
-	}
+	service := auth.New(slog.Default(), cfg, mockRepo, mockCache)
+	return service, mockRepo, mockCache
 }
 
-func TestAuthService_Register(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func TestAuthService_Login(t *testing.T) {
+	svc, mockRepo, _ := setupTest(t)
 
-	mockUserRepo := mocks.NewMockIUserRepository(ctrl)
-	mockRedis := redis.NewMockCache(ctrl)
+	hashed, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.DefaultCost)
+	require.NoError(t, err)
 
-	logger := slog.Default()
-	cfg := &config.Config{}
-
-	service := New(logger, cfg, mockUserRepo, mockRedis)
-
-	ctx := context.Background()
+	user := &models.User{
+		UUID:     "user-123",
+		Email:    "test@example.com",
+		PassHash: string(hashed),
+		IsAdmin:  false,
+	}
 
 	tests := []struct {
-		name         string
-		email        string
-		password     string
-		setupMocks   func()
-		expectedUUID string
-		expectedErr  error
+		name       string
+		email      string
+		password   string
+		setupMocks func()
+		wantTokens bool
+		wantErr    error
 	}{
 		{
-			name:     "successful registration",
-			email:    "newuser@example.com",
-			password: "securepassword",
+			name:     "success: valid credentials",
+			email:    "test@example.com",
+			password: "correct-password",
 			setupMocks: func() {
-				mockUserRepo.EXPECT().
-					Create(ctx, "newuser@example.com", gomock.Any()).
-					Return("new-uuid-123", nil)
+				mockRepo.EXPECT().
+					GetByEmail(gomock.Any(), "test@example.com").
+					Return(user, nil)
+				mockRepo.EXPECT().
+					IsAdmin(gomock.Any(), "user-123").
+					Return(false, nil)
 			},
-			expectedUUID: "new-uuid-123",
-			expectedErr:  nil,
+			wantTokens: true,
+			wantErr:    nil,
 		},
 		{
-			name:     "user already exists",
-			email:    "existing@example.com",
+			name:     "fail: user not found",
+			email:    "unknown@example.com",
 			password: "password",
 			setupMocks: func() {
-				mockUserRepo.EXPECT().
-					Create(ctx, "existing@example.com", gomock.Any()).
-					Return("", repository.ErrUserExists)
+				mockRepo.EXPECT().
+					GetByEmail(gomock.Any(), "unknown@example.com").
+					Return(nil, repository.ErrUserNotFound)
 			},
-			expectedUUID: "",
-			expectedErr:  repository.ErrUserExists,
+			wantTokens: false,
+			wantErr:    service.ErrInvalidCredentials,
+		},
+		{
+			name:     "fail: wrong password",
+			email:    "test@example.com",
+			password: "wrong-password",
+			setupMocks: func() {
+				mockRepo.EXPECT().
+					GetByEmail(gomock.Any(), "test@example.com").
+					Return(user, nil)
+				mockRepo.EXPECT().
+					IsAdmin(gomock.Any(), "user-123").
+					Return(false, nil)
+			},
+			wantTokens: false,
+			wantErr:    service.ErrInvalidCredentials,
+		},
+		{
+			name:     "fail: repo error on GetByEmail",
+			email:    "test@example.com",
+			password: "password",
+			setupMocks: func() {
+				mockRepo.EXPECT().
+					GetByEmail(gomock.Any(), "test@example.com").
+					Return(nil, assert.AnError)
+			},
+			wantTokens: false,
+			wantErr:    service.ErrInternal,
+		},
+		{
+			name:     "fail: repo error on IsAdmin",
+			email:    "test@example.com",
+			password: "correct-password",
+			setupMocks: func() {
+				mockRepo.EXPECT().
+					GetByEmail(gomock.Any(), "test@example.com").
+					Return(user, nil)
+				mockRepo.EXPECT().
+					IsAdmin(gomock.Any(), "user-123").
+					Return(false, assert.AnError)
+			},
+			wantTokens: false,
+			wantErr:    service.ErrInternal,
 		},
 	}
 
@@ -180,102 +141,328 @@ func TestAuthService_Register(t *testing.T) {
 				tt.setupMocks()
 			}
 
-			uuid, err := service.Register(ctx, tt.email, tt.password)
+			tokens, err := svc.Login(context.Background(), tt.email, tt.password)
 
-			if tt.expectedErr != nil {
-				assert.Error(t, err)
-				if tt.expectedErr.Error() != "" {
-					assert.EqualError(t, err, tt.expectedErr.Error())
-				}
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				assert.Nil(t, tokens)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, tokens)
+				assert.NotEmpty(t, tokens.AccessToken)
+				assert.NotEmpty(t, tokens.RefreshToken)
+
+				claims, err := jwt.ValidRefreshToken(tokens.RefreshToken, testRefreshSecret)
+				assert.NoError(t, err)
+				assert.Equal(t, "user-123", claims["user_id"])
+				assert.Equal(t, false, claims["is_admin"])
+			}
+		})
+	}
+}
+
+func TestAuthService_Register(t *testing.T) {
+	svc, mockRepo, _ := setupTest(t)
+
+	tests := []struct {
+		name       string
+		email      string
+		password   string
+		setupMocks func()
+		wantUUID   bool
+		wantErr    error
+	}{
+		{
+			name:     "success: new user",
+			email:    "new@example.com",
+			password: "password123",
+			setupMocks: func() {
+				mockRepo.EXPECT().
+					Create(gomock.Any(), "new@example.com", gomock.Any(), false).
+					Return("new-uuid-123", nil)
+			},
+			wantUUID: true,
+			wantErr:  nil,
+		},
+		{
+			name:     "fail: user exists",
+			email:    "existing@example.com",
+			password: "password123",
+			setupMocks: func() {
+				mockRepo.EXPECT().
+					Create(gomock.Any(), "existing@example.com", gomock.Any(), false).
+					Return("", repository.ErrUserExists)
+			},
+			wantUUID: false,
+			wantErr:  service.ErrUserExists,
+		},
+		{
+			name:     "fail: repo error",
+			email:    "error@example.com",
+			password: "password123",
+			setupMocks: func() {
+				mockRepo.EXPECT().
+					Create(gomock.Any(), "error@example.com", gomock.Any(), false).
+					Return("", assert.AnError)
+			},
+			wantUUID: false,
+			wantErr:  service.ErrInternal,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setupMocks != nil {
+				tt.setupMocks()
+			}
+
+			uuid, err := svc.Register(context.Background(), tt.email, tt.password)
+
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
 				assert.Empty(t, uuid)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedUUID, uuid)
+				assert.NotEmpty(t, uuid)
 			}
 		})
 	}
 }
 
 func TestAuthService_IsAdmin(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockUserRepo := mocks.NewMockIUserRepository(ctrl)
-	mockRedis := redis.NewMockCache(ctrl)
-
-	logger := slog.Default()
-	cfg := &config.Config{}
-
-	service := New(logger, cfg, mockUserRepo, mockRedis)
-
-	ctx := context.Background()
+	svc, mockRepo, _ := setupTest(t)
 
 	tests := []struct {
-		name        string
-		uuid        string
-		setupMocks  func()
-		expected    bool
-		expectedErr error
+		name       string
+		uuid       string
+		setupMocks func()
+		wantAdmin  bool
+		wantErr    error
 	}{
 		{
-			name: "user is admin",
+			name: "success: admin user",
 			uuid: "admin-123",
 			setupMocks: func() {
-				mockUserRepo.EXPECT().
-					IsAdmin(ctx, "admin-123").
+				mockRepo.EXPECT().
+					IsAdmin(gomock.Any(), "admin-123").
 					Return(true, nil)
 			},
-			expected:    true,
-			expectedErr: nil,
+			wantAdmin: true,
+			wantErr:   nil,
 		},
 		{
-			name: "user is not admin",
-			uuid: "user-456",
+			name: "success: regular user",
+			uuid: "user-123",
 			setupMocks: func() {
-				mockUserRepo.EXPECT().
-					IsAdmin(ctx, "user-456").
+				mockRepo.EXPECT().
+					IsAdmin(gomock.Any(), "user-123").
 					Return(false, nil)
 			},
-			expected:    false,
-			expectedErr: nil,
+			wantAdmin: false,
+			wantErr:   nil,
 		},
 		{
-			name: "user not found",
-			uuid: "unknown-789",
+			name: "fail: user not found",
+			uuid: "unknown-123",
 			setupMocks: func() {
-				mockUserRepo.EXPECT().
-					IsAdmin(ctx, "unknown-789").
+				mockRepo.EXPECT().
+					IsAdmin(gomock.Any(), "unknown-123").
 					Return(false, repository.ErrUserNotFound)
 			},
-			expected:    false,
-			expectedErr: repository.ErrUserNotFound,
+			wantAdmin: false,
+			wantErr:   service.ErrUserNotFound,
 		},
 		{
-			name: "database error",
-			uuid: "fail-999",
+			name: "fail: repo error",
+			uuid: "error-123",
 			setupMocks: func() {
-				mockUserRepo.EXPECT().
-					IsAdmin(ctx, "fail-999").
-					Return(false, errors.New("query failed"))
+				mockRepo.EXPECT().
+					IsAdmin(gomock.Any(), "error-123").
+					Return(false, assert.AnError)
 			},
-			expected:    false,
-			expectedErr: srv.ErrInternal,
+			wantAdmin: false,
+			wantErr:   service.ErrInternal,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
+			if tt.setupMocks != nil {
+				tt.setupMocks()
+			}
 
-			isAdmin, err := service.IsAdmin(ctx, tt.uuid)
+			isAdmin, err := svc.IsAdmin(context.Background(), tt.uuid)
 
-			assert.Equal(t, tt.expected, isAdmin)
-
-			if tt.expectedErr != nil {
-				assert.Error(t, err)
-				assert.Equal(t, err, tt.expectedErr)
+			assert.Equal(t, tt.wantAdmin, isAdmin)
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
 			} else {
 				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestAuthService_Logout(t *testing.T) {
+	svc, _, mockCache := setupTest(t)
+
+	validToken := jwt.NewToken("user-123", false, testRefreshSecret, time.Minute)
+
+	tests := []struct {
+		name         string
+		refreshToken string
+		setupMocks   func()
+		wantErr      error
+	}{
+		{
+			name:         "fail: already blacklisted",
+			refreshToken: "blacklisted-token",
+			setupMocks: func() {
+				mockCache.EXPECT().
+					Get(gomock.Any(), "blacklisted-token").
+					Return("true", nil)
+			},
+			wantErr: service.ErrRefreshBlacklist,
+		},
+		{
+			name:         "fail: invalid token",
+			refreshToken: "invalid.jwt.token",
+			setupMocks: func() {
+				mockCache.EXPECT().
+					Get(gomock.Any(), "invalid.jwt.token").
+					Return("", redis.Nil)
+			},
+			wantErr: service.ErrInvalidToken,
+		},
+		{
+			name:         "fail: cache set error",
+			refreshToken: validToken,
+			setupMocks: func() {
+				mockCache.EXPECT().
+					Get(gomock.Any(), validToken).
+					Return("", redis.Nil)
+				mockCache.EXPECT().
+					Set(gomock.Any(), validToken, true, gomock.Any()).
+					Return(assert.AnError)
+			},
+			wantErr: service.ErrInternal,
+		},
+		{
+			name:         "success: logout",
+			refreshToken: validToken,
+			setupMocks: func() {
+				mockCache.EXPECT().
+					Get(gomock.Any(), validToken).
+					Return("", redis.Nil)
+				mockCache.EXPECT().
+					Set(gomock.Any(), validToken, true, gomock.Any()).
+					Return(nil)
+			},
+			wantErr: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setupMocks != nil {
+				tt.setupMocks()
+			}
+
+			err := svc.Logout(context.Background(), tt.refreshToken)
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestAuthService_Refresh(t *testing.T) {
+	svc, _, mockCache := setupTest(t)
+
+	validToken := jwt.NewToken("user-123", false, testRefreshSecret, time.Minute)
+
+	tests := []struct {
+		name         string
+		refreshToken string
+		setupMocks   func()
+		wantTokens   bool
+		wantErr      error
+	}{
+		{
+			name:         "fail: blacklisted",
+			refreshToken: "blacklisted-token",
+			setupMocks: func() {
+				mockCache.EXPECT().
+					Get(gomock.Any(), "blacklisted-token").
+					Return("true", nil)
+			},
+			wantTokens: false,
+			wantErr:    service.ErrRefreshBlacklist,
+		},
+		{
+			name:         "fail: invalid token",
+			refreshToken: "invalid.jwt.token",
+			setupMocks: func() {
+				mockCache.EXPECT().
+					Get(gomock.Any(), "invalid.jwt.token").
+					Return("", redis.Nil)
+			},
+			wantTokens: false,
+			wantErr:    service.ErrInvalidToken,
+		},
+		{
+			name:         "fail: cache set error",
+			refreshToken: validToken,
+			setupMocks: func() {
+				mockCache.EXPECT().
+					Get(gomock.Any(), validToken).
+					Return("", redis.Nil)
+				mockCache.EXPECT().
+					Set(gomock.Any(), validToken, true, gomock.Any()).
+					Return(assert.AnError)
+			},
+			wantTokens: false,
+			wantErr:    service.ErrInternal,
+		},
+		{
+			name:         "success: refresh",
+			refreshToken: validToken,
+			setupMocks: func() {
+				mockCache.EXPECT().
+					Get(gomock.Any(), validToken).
+					Return("", redis.Nil)
+				mockCache.EXPECT().
+					Set(gomock.Any(), validToken, true, gomock.Any()).
+					Return(nil)
+			},
+			wantTokens: true,
+			wantErr:    nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setupMocks != nil {
+				tt.setupMocks()
+			}
+
+			tokens, err := svc.Refresh(context.Background(), tt.refreshToken)
+
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				assert.Nil(t, tokens)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, tokens)
+				assert.NotEmpty(t, tokens.AccessToken)
+				assert.NotEmpty(t, tokens.RefreshToken)
+
+				claims, err := jwt.ValidRefreshToken(tokens.RefreshToken, testRefreshSecret)
+				assert.NoError(t, err)
+				assert.Equal(t, "user-123", claims["user_id"])
+				assert.Equal(t, false, claims["is_admin"])
 			}
 		})
 	}
