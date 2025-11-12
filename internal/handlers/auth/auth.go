@@ -29,7 +29,7 @@ func (s *AuthGRPCService) Login(
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	accessToken, refreshToken, err := s.authService.Login(ctx, req.GetEmail(), req.GetPassword())
+	tokens, err := s.authService.Login(ctx, req.GetEmail(), req.GetPassword())
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidCredentials) {
 			return nil, status.Error(codes.InvalidArgument, "invalid credentials")
@@ -38,8 +38,8 @@ func (s *AuthGRPCService) Login(
 	}
 
 	return &pb.LoginResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
 	}, nil
 }
 
@@ -103,7 +103,7 @@ func (s *AuthGRPCService) Refresh(
 	ctx context.Context,
 	req *pb.RefreshRequest,
 ) (*pb.RefreshResponse, error) {
-	accessToken, refreshToken, err := s.authService.Refresh(ctx, req.RefreshToken)
+	tokens, err := s.authService.Refresh(ctx, req.RefreshToken)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidToken) {
 			return nil, status.Error(codes.InvalidArgument, "invalid token")
@@ -113,8 +113,8 @@ func (s *AuthGRPCService) Refresh(
 		}
 	}
 	return &pb.RefreshResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
 	}, nil
 }
 

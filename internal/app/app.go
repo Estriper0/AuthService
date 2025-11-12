@@ -5,10 +5,10 @@ import (
 
 	rd "github.com/Estriper0/auth_service/internal/cache/redis"
 	"github.com/Estriper0/auth_service/internal/config"
-	db "github.com/Estriper0/auth_service/internal/repository/database"
-	user_repo "github.com/Estriper0/auth_service/internal/repository/database/user"
+	user_repo "github.com/Estriper0/auth_service/internal/repository/user"
 	"github.com/Estriper0/auth_service/internal/server"
 	auth_service "github.com/Estriper0/auth_service/internal/service/auth"
+	db "github.com/Estriper0/auth_service/pkg/database"
 	"github.com/redis/go-redis/v9"
 )
 
