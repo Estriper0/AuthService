@@ -47,6 +47,7 @@ func TestRepositoriesSuite(t *testing.T) {
 func (s *TestSuite) SetupSuite() {
 	ctx := context.Background()
 	config := config.New()
+	config.Port = 55555
 
 	pgContainer, err := postgres.Run(ctx,
 		"postgres:18.0-alpine3.22",

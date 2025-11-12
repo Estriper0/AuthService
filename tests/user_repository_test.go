@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/Estriper0/auth_service/internal/repository"
-	"github.com/Estriper0/auth_service/internal/repository/database/user"
+	"github.com/Estriper0/auth_service/internal/repository/user"
 )
 
 func (s *TestSuite) TestUserRepository_Create_Success() {
@@ -14,7 +14,7 @@ func (s *TestSuite) TestUserRepository_Create_Success() {
 	email := "test@example.com"
 	passHash := "hashed_password_123"
 
-	uuid, err := repo.Create(ctx, email, passHash)
+	uuid, err := repo.Create(ctx, email, passHash, false)
 	s.Require().NoError(err)
 	s.NotEmpty(uuid)
 
@@ -32,10 +32,10 @@ func (s *TestSuite) TestUserRepository_Create_DuplicateEmail() {
 	email := "duplicate@example.com"
 	passHash := "hash123"
 
-	_, err := repo.Create(ctx, email, passHash)
+	_, err := repo.Create(ctx, email, passHash, false)
 	s.Require().NoError(err)
 
-	_, err = repo.Create(ctx, email, "another_hash")
+	_, err = repo.Create(ctx, email, "another_hash", false)
 	s.ErrorIs(err, repository.ErrUserExists)
 }
 
@@ -46,7 +46,7 @@ func (s *TestSuite) TestUserRepository_GetByEmail_Success() {
 	email := "getbyemail@example.com"
 	passHash := "securehash"
 
-	uuid, err := repo.Create(ctx, email, passHash)
+	uuid, err := repo.Create(ctx, email, passHash, false)
 	s.Require().NoError(err)
 
 	user, err := repo.GetByEmail(ctx, email)
@@ -85,7 +85,7 @@ func (s *TestSuite) TestUserRepository_IsAdmin_NonAdminUser() {
 	ctx := context.Background()
 	repo := user.New(s.db)
 
-	uuid, err := repo.Create(ctx, "user@example.com", "hash")
+	uuid, err := repo.Create(ctx, "user@example.com", "hash", false)
 	s.Require().NoError(err)
 
 	isAdmin, err := repo.IsAdmin(ctx, uuid)
