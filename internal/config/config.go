@@ -45,22 +45,15 @@ func New() *Config {
 
 	viper.AddConfigPath("./configs")
 	viper.AddConfigPath("../configs")
-	viper.SetConfigName(env)
+	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 
 	viper.SetDefault("env", env)
 	viper.SetDefault("database.dbport", 5432)
 	viper.SetDefault("database.dbhost", "localhost")
 
-	viper.BindEnv("database.dbhost", "DB_HOST")
-	viper.BindEnv("database.dbport", "DB_PORT")
-	viper.BindEnv("database.dbname", "DB_NAME")
-	viper.BindEnv("database.dbuser", "DB_USER")
-	viper.BindEnv("database.dbpassword", "DB_PASSWORD")
-	viper.BindEnv("redis.addr", "REDIS_ADDR")
-	viper.BindEnv("redis.password", "REDIS_PASSWORD")
-	viper.BindEnv("access_token_secret", "ACCESS_TOKEN_SECRET")
-	viper.BindEnv("refresh_token_secret", "REFRESH_TOKEN_SECRET")
+	Bind()
+
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {
@@ -73,4 +66,16 @@ func New() *Config {
 	}
 
 	return &config
+}
+
+func Bind() {
+	viper.BindEnv("database.dbhost", "DB_HOST")
+	viper.BindEnv("database.dbport", "DB_PORT")
+	viper.BindEnv("database.dbname", "DB_NAME")
+	viper.BindEnv("database.dbuser", "DB_USER")
+	viper.BindEnv("database.dbpassword", "DB_PASSWORD")
+	viper.BindEnv("redis.addr", "REDIS_ADDR")
+	viper.BindEnv("redis.password", "REDIS_PASSWORD")
+	viper.BindEnv("access_token_secret", "ACCESS_TOKEN_SECRET")
+	viper.BindEnv("refresh_token_secret", "REFRESH_TOKEN_SECRET")
 }

@@ -1,8 +1,0 @@
-port: 50051
-timeout: 30s
-access_token_ttl: 15m
-refresh_token_ttl: 10800m
-database:
-  sslmode: disable
-redis:
-  cache_ttl: 1m
