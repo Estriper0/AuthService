@@ -10,12 +10,13 @@ type IUserRepository interface {
 	GetByEmail(
 		ctx context.Context,
 		email string,
-	) (models.User, error)
+	) (*models.User, error)
 
 	Create(
 		ctx context.Context,
 		email string,
 		passHash string,
+		is_admin bool,
 	) (string, error)
 
 	IsAdmin(
