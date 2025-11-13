@@ -84,7 +84,10 @@ func (s *TestSuite) SetupSuite() {
 		"postgres", driver)
 	s.Require().NoError(err)
 
-	m.Up()
+	err = m.Up()
+	if err != nil {
+		panic(err)
+	}
 
 	s.ctx = ctx
 	s.db = db

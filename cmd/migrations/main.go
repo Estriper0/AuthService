@@ -50,6 +50,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	m.Up()
+	err = m.Up()
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println("Migrations complete!")
 }
