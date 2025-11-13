@@ -70,7 +70,7 @@ func (s *TestSuite) TestUserRepository_IsAdmin_AdminUser() {
 
 	var uuid string
 	err := s.db.QueryRowContext(ctx, `
-		INSERT INTO users (email, pass_hash, is_admin) 
+		INSERT INTO auth.users (email, pass_hash, is_admin) 
 		VALUES ('admin@example.com', 'hash', true) 
 		RETURNING uuid
 	`).Scan(&uuid)

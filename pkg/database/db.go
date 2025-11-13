@@ -12,7 +12,7 @@ func GetDB(config *config.Database) *sql.DB {
 	db, err := sql.Open(
 		"postgres",
 		fmt.Sprintf(
-			"host=%s port=%s user=%s password=%s dbname=auth.%s sslmode=%s",
+			"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 			config.DbHost,
 			config.DbPort,
 			config.DbUser,

@@ -68,7 +68,15 @@ func (s *TestSuite) SetupSuite() {
 	db, err := sql.Open("postgres", connStr)
 	s.Require().NoError(err)
 
-	driver, err := migrate_pg.WithInstance(db, &migrate_pg.Config{})
+	_, err = db.Exec("CREATE SCHEMA IF NOT EXISTS auth")
+	if err != nil {
+		panic(err)
+	}
+
+	driver, err := migrate_pg.WithInstance(db, &migrate_pg.Config{
+		MigrationsTable: "auth.migrations",
+		SchemaName:      "auth",
+	})
 	s.Require().NoError(err)
 
 	m, err := migrate.NewWithDatabaseInstance(
@@ -89,6 +97,6 @@ func (s *TestSuite) TearDownSuite() {
 }
 
 func (s *TestSuite) SetupTest() {
-	_, err := s.db.ExecContext(s.ctx, "TRUNCATE TABLE users CASCADE;")
+	_, err := s.db.ExecContext(s.ctx, "TRUNCATE TABLE auth.users CASCADE;")
 	s.Require().NoError(err)
 }
