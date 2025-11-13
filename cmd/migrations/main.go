@@ -31,7 +31,16 @@ func main() {
 	}
 	defer db.Close()
 
-	driver, err := postgres.WithInstance(db, &postgres.Config{})
+	_, err = db.Exec("CREATE SCHEMA IF NOT EXISTS auth")
+	if err != nil {
+		panic(err)
+	}
+
+	driver, err := postgres.WithInstance(db, &postgres.Config{
+		MigrationsTable: "auth.migrations",
+		SchemaName:      "auth",
+	})
+
 	if err != nil {
 		panic(err)
 	}
